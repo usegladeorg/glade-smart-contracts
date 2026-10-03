@@ -1,0 +1,174 @@
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.24;
+
+import {Test} from "forge-std/Test.sol";
+import {ProtocolAuthority} from "../../src/core/ProtocolAuthority.sol";
+import {AccountRegistry} from "../../src/core/AccountRegistry.sol";
+import {RequestLedger} from "../../src/payments/RequestLedger.sol";
+import {IProtocolAuthority} from "../../src/interfaces/IProtocolAuthority.sol";
+import {IAccountRegistry} from "../../src/interfaces/IAccountRegistry.sol";
+import {MockERC20} from "../helpers/MockERC20.sol";
+import "../../src/utils/ProtocolErrors.sol";
+
+/// @notice Payer and timestamp receipts on requests, the commitment check for
+///         confidential requests, and expiry extension.
+contract RequestLedgerReceiptTest is Test {
+    ProtocolAuthority protocol;
+    AccountRegistry registry;
+    RequestLedger requests;
+    MockERC20 usdg;
+
+    address compliance = makeAddr("compliance");
+    address gwen = makeAddr("gwen");
+    address felix = makeAddr("felix");
+
+    function setUp() public {
+        usdg = new MockERC20("Global Dollar", "USDG", 6);
+        protocol = new ProtocolAuthority(compliance);
+        registry = new AccountRegistry(IProtocolAuthority(address(protocol)));
+        requests = new RequestLedger(
+            IProtocolAuthority(address(protocol)), IAccountRegistry(address(registry))
+        );
+
+        vm.prank(gwen);
+        registry.createProfile("gwen", AccountRegistry.AccountKind.Personal);
+        usdg.mint(felix, 100e6);
+        vm.prank(felix);
+        usdg.approve(address(requests), type(uint256).max);
+    }
+
+    function test_open_request_has_no_payer_yet() public {
+        vm.prank(gwen);
+        uint256 id = requests.create(
+            gwen,
+            address(usdg),
+            false,
+            25e6,
+            bytes32(0),
+            bytes32(0),
+            uint64(block.timestamp + 1 hours)
+        );
+
+        RequestLedger.Request memory r = requests.getRequest(id);
+        assertEq(r.payer, address(0));
+        assertEq(r.fulfilledAt, 0);
+    }
+
+    function test_fulfilment_records_payer_and_time() public {
+        vm.prank(gwen);
+        uint256 id = requests.create(
+            gwen,
+            address(usdg),
+            false,
+            25e6,
+            bytes32(0),
+            bytes32(0),
+            uint64(block.timestamp + 1 hours)
+        );
+
+        vm.warp(block.timestamp + 10 minutes);
+        vm.prank(felix);
+        requests.fulfill(id, 25e6, bytes32(0));
+
+        RequestLedger.Request memory r = requests.getRequest(id);
+        assertEq(uint8(r.status), uint8(RequestLedger.RequestStatus.Fulfilled));
+        assertEq(r.payer, felix);
+        assertEq(r.fulfilledAt, uint64(block.timestamp));
+    }
+
+    function test_cancelled_request_records_nothing() public {
+        vm.startPrank(gwen);
+        uint256 id = requests.create(
+            gwen,
+            address(usdg),
+            false,
+            25e6,
+            bytes32(0),
+            bytes32(0),
+            uint64(block.timestamp + 1 hours)
+        );
+        requests.cancel(id);
+        vm.stopPrank();
+
+        RequestLedger.Request memory r = requests.getRequest(id);
+        assertEq(r.payer, address(0));
+        assertEq(r.fulfilledAt, 0);
+    }
+
+    function test_confidential_request_without_a_commitment_is_refused() public {
+        vm.expectRevert(MissingCommitment.selector);
+        vm.prank(gwen);
+        requests.create(
+            gwen, address(usdg), true, 0, bytes32(0), bytes32(0), uint64(block.timestamp + 1 hours)
+        );
+
+        // Supplying a nonzero commitment lets the same request be created.
+        vm.prank(gwen);
+        uint256 id = requests.create(
+            gwen,
+            address(usdg),
+            true,
+            0,
+            keccak256("commitment"),
+            bytes32(0),
+            uint64(block.timestamp + 1 hours)
+        );
+        assertTrue(requests.isFulfillable(id));
+    }
+
+    function _open() internal returns (uint256) {
+        vm.prank(gwen);
+        return requests.create(
+            gwen,
+            address(usdg),
+            false,
+            25e6,
+            bytes32(0),
+            bytes32(0),
+            uint64(block.timestamp + 1 hours)
+        );
+    }
+
+    function test_creator_can_extend_an_open_request() public {
+        uint256 id = _open();
+        uint64 later = uint64(block.timestamp + 3 days);
+
+        vm.prank(gwen);
+        requests.extendExpiry(id, later);
+        assertEq(requests.getRequest(id).expiresAt, later);
+
+        // Two hours on, past the original one hour expiry, payment still works.
+        vm.warp(block.timestamp + 2 hours);
+        assertTrue(requests.isFulfillable(id));
+        vm.prank(felix);
+        requests.fulfill(id, 25e6, bytes32(0));
+    }
+
+    function test_extension_only_moves_forward_and_only_while_alive() public {
+        uint256 id = _open();
+        uint64 current = requests.getRequest(id).expiresAt;
+
+        vm.expectRevert(Unauthorized.selector);
+        vm.prank(felix);
+        requests.extendExpiry(id, current + 1 days);
+
+        vm.expectRevert(InvalidExpiry.selector);
+        vm.prank(gwen);
+        requests.extendExpiry(id, current);
+
+        vm.warp(current);
+        vm.expectRevert(RequestExpired.selector);
+        vm.prank(gwen);
+        requests.extendExpiry(id, current + 1 days);
+    }
+
+    function test_settled_request_cannot_be_extended() public {
+        uint256 id = _open();
+        vm.prank(felix);
+        requests.fulfill(id, 25e6, bytes32(0));
+
+        vm.expectRevert(RequestNotOpen.selector);
+        vm.prank(gwen);
+        requests.extendExpiry(id, uint64(block.timestamp + 1 days));
+    }
+}
