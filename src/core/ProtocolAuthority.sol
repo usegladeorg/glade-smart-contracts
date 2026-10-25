@@ -23,6 +23,9 @@ contract ProtocolAuthority is IProtocolAuthority {
     ///         the current nominee.
     error NotPendingAuthority();
 
+    /// @notice Raised when {setPause} would leave the pause flag unchanged.
+    error PauseUnchanged();
+
     /// @notice Current admin. Can reassign roles, toggle the pause, and set
     ///         fee routing.
     address public authority;
@@ -130,7 +133,11 @@ contract ProtocolAuthority is IProtocolAuthority {
     }
 
     /// @notice Turns the global pause on or off.
+    /// @dev A repeat call is rejected instead of re-emitting the event. During
+    ///      an incident several operators may race to pause, and monitors
+    ///      should see one {ProtocolPauseToggled} per real state change.
     function setPause(bool paused_) external onlyAuthority {
+        if (paused == paused_) revert PauseUnchanged();
         paused = paused_;
         emit ProtocolPauseToggled(paused_);
     }
