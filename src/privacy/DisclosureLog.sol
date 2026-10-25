@@ -116,6 +116,11 @@ contract DisclosureLog {
         return _receiptsByTransfer[keccak256(bytes(txReference))];
     }
 
+    /// @notice Number of receipts recorded for a transfer reference.
+    function receiptCountForTransfer(string calldata txReference) external view returns (uint256) {
+        return _receiptsByTransfer[keccak256(bytes(txReference))].length;
+    }
+
     /// @notice Paginated receipt ids for `profile`: up to `limit` entries from
     ///         index `offset`, in filing order. A long disclosure history can
     ///         exceed a single RPC response, so clients keep increasing
@@ -123,9 +128,29 @@ contract DisclosureLog {
     function receiptIdsOf(address profile, uint256 offset, uint256 limit)
         external
         view
+        returns (uint256[] memory)
+    {
+        return _page(_receiptsByProfile[profile], offset, limit);
+    }
+
+    /// @notice Paginated version of {receiptIdsForTransfer}. A transfer that is
+    ///         disclosed to many viewers over time can build up a long list, so
+    ///         this follows the same offset and limit rules as the per-profile
+    ///         variant.
+    function receiptIdsForTransfer(string calldata txReference, uint256 offset, uint256 limit)
+        external
+        view
+        returns (uint256[] memory)
+    {
+        return _page(_receiptsByTransfer[keccak256(bytes(txReference))], offset, limit);
+    }
+
+    /// @dev Shared slicing for the paginated views above.
+    function _page(uint256[] storage all, uint256 offset, uint256 limit)
+        internal
+        view
         returns (uint256[] memory page)
     {
-        uint256[] storage all = _receiptsByProfile[profile];
         uint256 total = all.length;
         if (offset >= total) return new uint256[](0);
 
