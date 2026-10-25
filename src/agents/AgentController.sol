@@ -718,6 +718,28 @@ contract AgentController is ReentrancyGuard {
         return _agentsByOwner[owner];
     }
 
+    /// @notice Paginated version of {agentIdsOf}: up to `limit` ids starting at
+    ///         index `offset`, in creation order. Operators running many agents
+    ///         can page through them the same way wallets page payment requests.
+    function agentIdsOf(address owner, uint256 offset, uint256 limit)
+        external
+        view
+        returns (uint256[] memory page)
+    {
+        uint256[] storage all = _agentsByOwner[owner];
+        uint256 total = all.length;
+        if (offset >= total) return new uint256[](0);
+
+        // Compare `limit` with the remaining count before adding, so passing
+        // type(uint256).max returns the rest of the list instead of overflowing.
+        uint256 end = limit > total - offset ? total : offset + limit;
+
+        page = new uint256[](end - offset);
+        for (uint256 i = offset; i < end; ++i) {
+            page[i - offset] = all[i];
+        }
+    }
+
     /// @notice Predicts whether a spend would settle, queue, or be refused at
     ///         this moment. It replicates the checks of {payInvoice} and
     ///         {queueInvoice}, letting an agent avoid a doomed transaction and
