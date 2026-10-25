@@ -42,6 +42,9 @@ contract AgentController is ReentrancyGuard {
     /// @notice Raised if a rename supplies the agent's current label.
     error SameLabel();
 
+    /// @notice Raised if a tier change supplies the agent's current tier.
+    error SameAutonomyTier();
+
     /// @notice The degree of independence an agent has before a human must approve.
     enum AutonomyTier {
         /// Direct settlement is disabled; each spend goes to the approval queue.
@@ -148,6 +151,9 @@ contract AgentController is ReentrancyGuard {
     );
     event AllowedRecipientRemoved(
         uint256 indexed agentId, address indexed recipient, uint256 timestamp
+    );
+    event AutonomyTierChanged(
+        uint256 indexed agentId, AutonomyTier previousTier, AutonomyTier newTier, uint256 timestamp
     );
     event AgentRenamed(
         uint256 indexed agentId, string previousLabel, string newLabel, uint256 timestamp
@@ -384,6 +390,26 @@ contract AgentController is ReentrancyGuard {
         string memory previous = a.label;
         a.label = label;
         emit AgentRenamed(agentId, previous, label, block.timestamp);
+    }
+
+    /// @notice Moves the agent to a different autonomy tier. Owners usually
+    ///         start an agent on Supervised and promote it once they trust its
+    ///         behaviour, or demote it after something looks off, without
+    ///         recreating the agent and moving its vault.
+    /// @dev Spends already sitting in the queue are left alone. They are
+    ///      re-checked against policy when the owner approves them, and the
+    ///      tier only governs which path a new spend may take.
+    function setAutonomyTier(uint256 agentId, AutonomyTier autonomyTier)
+        external
+        onlyAgentOwner(agentId)
+    {
+        Agent storage a = _agents[agentId];
+        if (a.status == AgentStatus.Revoked) revert AgentAlreadyRevoked();
+        if (a.autonomyTier == autonomyTier) revert SameAutonomyTier();
+
+        AutonomyTier previous = a.autonomyTier;
+        a.autonomyTier = autonomyTier;
+        emit AutonomyTierChanged(agentId, previous, autonomyTier, block.timestamp);
     }
 
     /// @notice Toggles an agent between Active and Paused without touching its
