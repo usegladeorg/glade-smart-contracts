@@ -309,6 +309,22 @@ contract ConfidentialToken is ReentrancyGuard {
         return (p.x, p.y);
     }
 
+    /// @notice Returns the public keys for several accounts in one call, in
+    ///         the order given. A sender has to encrypt each recipient's delta
+    ///         under that recipient's key, so a client preparing transfers to
+    ///         many accounts can fetch every key at once. Unregistered accounts
+    ///         come back as (0, 0); check {registered} before sending to them.
+    function publicKeysOf(address[] calldata accounts)
+        external
+        view
+        returns (AltBn128.Point[] memory keys)
+    {
+        keys = new AltBn128.Point[](accounts.length);
+        for (uint256 i; i < accounts.length; ++i) {
+            keys[i] = _publicKey[accounts[i]];
+        }
+    }
+
     /// @notice True when the contract's underlying balance is at least
     ///         {totalWrapped}. Direct ERC-20 transfers into the contract can
     ///         make it exceed that total, which does no harm; a shortfall is
