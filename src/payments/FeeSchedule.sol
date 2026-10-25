@@ -23,6 +23,10 @@ contract FeeSchedule is IFeeSchedule {
     ///         than the pending authority.
     error NotPendingAuthority();
 
+    /// @notice Reverts when {setSchedule} is given the rate and cap already
+    ///         in effect.
+    error ScheduleUnchanged();
+
     uint256 internal constant BPS = 10_000;
 
     /// @notice Upper bound on `baseFeeBps`, equal to 1%. Since payers bear the
@@ -86,6 +90,9 @@ contract FeeSchedule is IFeeSchedule {
     /// @notice Replaces both the base rate and the fee cap.
     function setSchedule(uint16 baseFeeBps_, uint256 feeCap_) external onlyAuthority {
         if (baseFeeBps_ > MAX_BASE_FEE_BPS) revert InvalidFeeConfig();
+        // A repeat of the live schedule would still emit FeeScheduleUpdated,
+        // and anyone watching fee changes would read it as a real update.
+        if (baseFeeBps_ == baseFeeBps && feeCap_ == feeCap) revert ScheduleUnchanged();
         baseFeeBps = baseFeeBps_;
         feeCap = feeCap_;
         emit FeeScheduleUpdated(baseFeeBps_, feeCap_);
