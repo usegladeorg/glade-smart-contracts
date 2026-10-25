@@ -94,6 +94,21 @@ contract DisclosureLog {
         return _receipts[receiptId];
     }
 
+    /// @notice Loads several receipts in one call, in the order given. An
+    ///         audit export usually pages ids out of {receiptIdsOf} and then
+    ///         needs every receipt on the page. Unknown ids come back as zeroed
+    ///         structs with `exists` set to false, matching {getReceipt}.
+    function getReceipts(uint256[] calldata receiptIds)
+        external
+        view
+        returns (DisclosureReceipt[] memory receipts)
+    {
+        receipts = new DisclosureReceipt[](receiptIds.length);
+        for (uint256 i; i < receiptIds.length; ++i) {
+            receipts[i] = _receipts[receiptIds[i]];
+        }
+    }
+
     /// @notice Number of receipts filed by `profile`.
     function receiptCountOf(address profile) external view returns (uint256) {
         return _receiptsByProfile[profile].length;
