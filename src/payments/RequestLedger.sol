@@ -244,6 +244,22 @@ contract RequestLedger is ReentrancyGuard {
         return _requests[requestId];
     }
 
+    /// @notice Loads several requests in one call, in the order given. A
+    ///         wallet usually pages ids out of {requestIdsOf} and then needs
+    ///         every record on that page, so this saves one RPC round trip per
+    ///         link. Unknown ids come back as zeroed structs with `exists`
+    ///         set to false, matching {getRequest}.
+    function getRequests(uint256[] calldata requestIds)
+        external
+        view
+        returns (Request[] memory requests)
+    {
+        requests = new Request[](requestIds.length);
+        for (uint256 i; i < requestIds.length; ++i) {
+            requests[i] = _requests[requestIds[i]];
+        }
+    }
+
     /// @notice Number of requests created by `requester`.
     function requestCountOf(address requester) external view returns (uint256) {
         return _requestsByRequester[requester].length;
