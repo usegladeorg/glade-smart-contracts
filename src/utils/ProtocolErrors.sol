@@ -53,6 +53,7 @@ error RequestCommitmentMismatch();
 error MissingCommitment();
 error InvalidExpiry();
 error InvalidToken();
+error SelfPayment();
 
 /* ----- Disclosure log ----- */
 error InvalidTxReferenceLength();

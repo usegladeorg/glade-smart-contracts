@@ -155,6 +155,9 @@ contract RequestLedger is ReentrancyGuard {
         Request storage r = _requests[requestId];
         if (r.status != RequestStatus.Open) revert RequestNotOpen();
         if (block.timestamp >= r.expiresAt) revert RequestExpired();
+        // Paying a request back to yourself moves nothing and still costs the
+        // protocol fee, yet would close the request as if someone had paid.
+        if (msg.sender == r.receiver) revert SelfPayment();
         // Public requests are never stored with a zero amount, yet a commitment
         // can encode zero, and paying it would close the request with nothing
         // transferred. Block it here just as {create} blocks a zero public amount.
