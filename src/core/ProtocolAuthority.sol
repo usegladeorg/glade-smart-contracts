@@ -26,6 +26,10 @@ contract ProtocolAuthority is IProtocolAuthority {
     /// @notice Raised when {setPause} would leave the pause flag unchanged.
     error PauseUnchanged();
 
+    /// @notice Raised when {setComplianceAuthority} is given the address that
+    ///         already holds the role.
+    error SameComplianceAuthority();
+
     /// @notice Current admin. Can reassign roles, toggle the pause, and set
     ///         fee routing.
     address public authority;
@@ -106,6 +110,9 @@ contract ProtocolAuthority is IProtocolAuthority {
     ///      Any pending admin nomination is left untouched.
     function setComplianceAuthority(address newComplianceAuthority) external onlyAuthority {
         if (newComplianceAuthority == address(0)) revert ZeroAddress();
+        // Re-setting the same provider would log a handover that never
+        // happened, which is misleading in a compliance audit trail.
+        if (newComplianceAuthority == complianceAuthority) revert SameComplianceAuthority();
         address previous = complianceAuthority;
         complianceAuthority = newComplianceAuthority;
         emit ComplianceAuthorityUpdated(previous, newComplianceAuthority);
