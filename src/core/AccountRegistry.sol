@@ -194,6 +194,21 @@ contract AccountRegistry is IAccountRegistry {
         return _handleOwner[keccak256(bytes(handle))];
     }
 
+    /// @notice Resolves several `.glade` handles in one call, in the order
+    ///         given. A split bill or payroll run pays many handles at once,
+    ///         and this avoids one RPC round trip per recipient. Unclaimed
+    ///         handles resolve to address(0), as with {resolveHandle}.
+    function resolveHandles(string[] calldata handles)
+        external
+        view
+        returns (address[] memory owners)
+    {
+        owners = new address[](handles.length);
+        for (uint256 i; i < handles.length; ++i) {
+            owners[i] = _handleOwner[keccak256(bytes(handles[i]))];
+        }
+    }
+
     /// @notice True when `handle` is valid in length and characters and no
     ///         wallet owns it yet. Sign-up forms can call this as the user
     ///         types, so clients do not need to duplicate the validation rules.
