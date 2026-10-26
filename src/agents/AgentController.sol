@@ -120,6 +120,7 @@ contract AgentController is ReentrancyGuard {
     mapping(uint256 => SpendPolicy) internal _policies;
     mapping(uint256 => uint256) public vaultBalance; // agentId => share of pooled tokens
     mapping(uint256 => uint256) public pendingCount; // agentId => id the next queued spend receives
+    mapping(uint256 => uint256) public openPendingCount; // agentId => queued spends still unresolved
     mapping(uint256 => mapping(uint256 => PendingApproval)) internal _pending;
 
     /// @notice For each owner, the ids of its agents in creation order. Lets a
@@ -590,6 +591,7 @@ contract AgentController is ReentrancyGuard {
         _checkAllowlist(p, recipient);
 
         pendingId = pendingCount[agentId]++;
+        ++openPendingCount[agentId];
         _pending[agentId][pendingId] = PendingApproval({
             agentId: agentId,
             ownerProfile: a.ownerProfile,
@@ -641,6 +643,7 @@ contract AgentController is ReentrancyGuard {
         p.updatedAt = uint64(block.timestamp);
         vaultBalance[agentId] -= amount + fee;
         delete _pending[agentId][pendingId];
+        --openPendingCount[agentId];
 
         IERC20(p.token).safeTransfer(recipient, amount);
         if (fee > 0) {
@@ -659,6 +662,7 @@ contract AgentController is ReentrancyGuard {
     function rejectPending(uint256 agentId, uint256 pendingId) external onlyAgentOwner(agentId) {
         if (!_pending[agentId][pendingId].exists) revert PendingApprovalNotFound();
         delete _pending[agentId][pendingId];
+        --openPendingCount[agentId];
         emit PendingPaymentRejected(agentId, pendingId, block.timestamp);
     }
 
@@ -670,6 +674,7 @@ contract AgentController is ReentrancyGuard {
     function withdrawPending(uint256 agentId, uint256 pendingId) external onlyAgentSigner(agentId) {
         if (!_pending[agentId][pendingId].exists) revert PendingApprovalNotFound();
         delete _pending[agentId][pendingId];
+        --openPendingCount[agentId];
         emit PendingPaymentWithdrawn(agentId, pendingId, block.timestamp);
     }
 
@@ -694,15 +699,15 @@ contract AgentController is ReentrancyGuard {
     /// @notice Ids of an agent's unresolved queued spends, in ascending order.
     ///         Because ids are sequential and resolved entries get deleted, this
     ///         saves an approval UI from probing every id ever assigned.
+    /// @dev The array is sized from {openPendingCount}, so only one pass over
+    ///      the issued ids is needed, and it stops as soon as every open entry
+    ///      has been found.
     function openPendingIds(uint256 agentId) external view returns (uint256[] memory ids) {
-        uint256 issued = pendingCount[agentId];
-        uint256 open;
-        for (uint256 i; i < issued; ++i) {
-            if (_pending[agentId][i].exists) ++open;
-        }
+        uint256 open = openPendingCount[agentId];
         ids = new uint256[](open);
         uint256 k;
-        for (uint256 i; i < issued; ++i) {
+        uint256 issued = pendingCount[agentId];
+        for (uint256 i; i < issued && k < open; ++i) {
             if (_pending[agentId][i].exists) ids[k++] = i;
         }
     }
