@@ -703,6 +703,21 @@ contract AgentController is ReentrancyGuard {
         return _pending[agentId][pendingId];
     }
 
+    /// @notice Loads several queued spends for one agent in a single call, in
+    ///         the order given. Pair it with {openPendingIds} so an approval
+    ///         screen can show every waiting payment without one request per
+    ///         entry. Resolved or unknown ids come back with `exists` false.
+    function getPendingApprovals(uint256 agentId, uint256[] calldata pendingIds)
+        external
+        view
+        returns (PendingApproval[] memory approvals)
+    {
+        approvals = new PendingApproval[](pendingIds.length);
+        for (uint256 i; i < pendingIds.length; ++i) {
+            approvals[i] = _pending[agentId][pendingIds[i]];
+        }
+    }
+
     /// @notice Ids of an agent's unresolved queued spends, in ascending order.
     ///         Because ids are sequential and resolved entries get deleted, this
     ///         saves an approval UI from probing every id ever assigned.
