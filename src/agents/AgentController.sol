@@ -111,6 +111,12 @@ contract AgentController is ReentrancyGuard {
     uint256 internal constant MAX_ALLOWED_RECIPIENTS = 10;
     uint256 internal constant WINDOW = 1 days;
 
+    /// @notice Most unresolved queued spends an agent may have at once. A
+    ///         leaked signer key cannot pay out past the policy, but it could
+    ///         otherwise flood the owner's approval queue and grow
+    ///         {openPendingIds} without bound.
+    uint256 public constant MAX_OPEN_PENDING = 25;
+
     IProtocolAuthority public immutable protocol;
     IAccountRegistry public immutable registry;
 
@@ -589,6 +595,7 @@ contract AgentController is ReentrancyGuard {
             revert AmountWithinHitlThreshold();
         }
         _checkAllowlist(p, recipient);
+        if (openPendingCount[agentId] >= MAX_OPEN_PENDING) revert TooManyPendingApprovals();
 
         pendingId = pendingCount[agentId]++;
         ++openPendingCount[agentId];
