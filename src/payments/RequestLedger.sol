@@ -49,6 +49,11 @@ contract RequestLedger is ReentrancyGuard {
         uint64 fulfilledAt; // payment timestamp, unset while open
     }
 
+    /// @notice Furthest ahead of the current time that a request may expire.
+    ///         A link that stays payable for years is more likely to be paid
+    ///         by mistake long after the requester has stopped expecting it.
+    uint64 public constant MAX_REQUEST_LIFETIME = 365 days;
+
     IProtocolAuthority public immutable protocol;
     IAccountRegistry public immutable registry;
 
@@ -109,6 +114,7 @@ contract RequestLedger is ReentrancyGuard {
         // entered by mistake), because such a request could never be settled.
         if (token.code.length == 0) revert InvalidToken();
         if (expiresAt <= block.timestamp) revert InvalidExpiry();
+        if (expiresAt > block.timestamp + MAX_REQUEST_LIFETIME) revert InvalidExpiry();
         if (!isConfidential && amount == 0) revert InvalidSpendAmount();
         // Without a commitment, fulfill would check every payer against a zero
         // hash and fail, leaving the request permanently unpayable.
@@ -227,6 +233,9 @@ contract RequestLedger is ReentrancyGuard {
         if (r.status != RequestStatus.Open) revert RequestNotOpen();
         if (block.timestamp >= r.expiresAt) revert RequestExpired();
         if (newExpiresAt <= r.expiresAt) revert InvalidExpiry();
+        // Measured from now rather than from creation, so a requester can keep
+        // a link alive with periodic extensions but never jump years ahead.
+        if (newExpiresAt > block.timestamp + MAX_REQUEST_LIFETIME) revert InvalidExpiry();
 
         uint64 previous = r.expiresAt;
         r.expiresAt = newExpiresAt;
