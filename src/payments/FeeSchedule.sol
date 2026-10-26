@@ -105,6 +105,9 @@ contract FeeSchedule is IFeeSchedule {
     ///      other admin roles, so operators follow a single procedure. Passing
     ///      address(0) cancels a pending proposal.
     function beginAuthorityTransfer(address newAuthority) external onlyAuthority {
+        // Nominating the sitting authority would leave a handoff open that
+        // changes nothing when accepted.
+        if (newAuthority == authority) revert AlreadyAuthority();
         pendingAuthority = newAuthority;
         emit AuthorityTransferStarted(authority, newAuthority);
     }

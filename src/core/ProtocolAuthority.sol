@@ -125,6 +125,9 @@ contract ProtocolAuthority is IProtocolAuthority {
     ///      mistyped address. Passing the zero address cancels a pending
     ///      nomination.
     function beginAuthorityTransfer(address newAuthority) external onlyAuthority {
+        // Nominating the sitting authority would leave a handoff open that
+        // changes nothing when accepted.
+        if (newAuthority == authority) revert AlreadyAuthority();
         pendingAuthority = newAuthority;
         emit AuthorityTransferStarted(authority, newAuthority);
     }

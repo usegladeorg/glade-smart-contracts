@@ -12,6 +12,7 @@ error ZeroAddress();
 error ProtocolPaused();
 error Unauthorized();
 error UnauthorizedComplianceAuthority();
+error AlreadyAuthority();
 
 /* ----- Account registry and handles ----- */
 error InvalidHandleLength();
