@@ -117,6 +117,11 @@ contract AgentController is ReentrancyGuard {
     ///         {openPendingIds} without bound.
     uint256 public constant MAX_OPEN_PENDING = 25;
 
+    /// @notice How long a queued spend stays approvable. x402 challenges and
+    ///         most invoices go stale well before this, and approving a week-old
+    ///         request is more likely a misclick than an intent to pay it.
+    uint256 public constant PENDING_TTL = 7 days;
+
     IProtocolAuthority public immutable protocol;
     IAccountRegistry public immutable registry;
 
@@ -629,6 +634,8 @@ contract AgentController is ReentrancyGuard {
 
         PendingApproval storage pa = _pending[agentId][pendingId];
         if (!pa.exists) revert PendingApprovalNotFound();
+        // Expired entries can still be rejected or withdrawn to free the slot.
+        if (block.timestamp >= pa.createdAt + PENDING_TTL) revert PendingApprovalExpired();
 
         uint256 amount = pa.amount;
         address recipient = pa.recipient;

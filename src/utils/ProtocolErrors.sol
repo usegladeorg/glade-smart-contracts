@@ -46,6 +46,7 @@ error InsufficientVaultBalance();
 /* ----- Human approvals ----- */
 error PendingApprovalNotFound();
 error TooManyPendingApprovals();
+error PendingApprovalExpired();
 
 /* ----- Payment requests ----- */
 error RequestNotOpen();
