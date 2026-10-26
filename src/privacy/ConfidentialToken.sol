@@ -163,7 +163,25 @@ contract ConfidentialToken is ReentrancyGuard {
     ///         can still decrypt it.
     /// @param amount Quantity of the underlying asset to wrap.
     function deposit(uint256 amount) external nonReentrant whenNotPaused {
-        if (!registered[msg.sender]) revert AccountNotRegistered();
+        _deposit(msg.sender, amount);
+    }
+
+    /// @notice Wraps the caller's underlying asset straight into another
+    ///         account's encrypted balance. Useful for payroll or top-ups where
+    ///         the payer holds plain USDG and the recipient wants it private.
+    /// @dev The credit uses the same zero-randomness encoding as {deposit}, so
+    ///      `to` can decrypt it with its own view key. The amount is public in
+    ///      this call, exactly as it is for an ordinary deposit.
+    /// @param to Registered account whose balance is credited.
+    /// @param amount Quantity of the underlying asset to wrap.
+    function depositFor(address to, uint256 amount) external nonReentrant whenNotPaused {
+        _deposit(to, amount);
+    }
+
+    /// @dev Shared body of {deposit} and {depositFor}: pulls from the caller
+    ///      and credits `to`.
+    function _deposit(address to, uint256 amount) internal {
+        if (!registered[to]) revert AccountNotRegistered();
         if (amount == 0) revert InvalidSpendAmount();
 
         uint256 before = asset.balanceOf(address(this));
@@ -173,11 +191,11 @@ contract ConfidentialToken is ReentrancyGuard {
         // would otherwise emit Deposited without crediting anything.
         if (received == 0) revert InvalidSpendAmount();
 
-        Ciphertext storage bal = _balance[msg.sender];
+        Ciphertext storage bal = _balance[to];
         bal.c2 = bal.c2.add(AltBn128.encode(received));
         totalWrapped += received;
 
-        emit Deposited(msg.sender, received);
+        emit Deposited(to, received);
     }
 
     /// @notice Sends `amount` of the underlying asset back to the caller and
